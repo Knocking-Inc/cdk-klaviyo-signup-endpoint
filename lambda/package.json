@@ -1,0 +1,12 @@
+{
+  "name": "klaviyo-signup-lambda",
+  "version": "1.0.0",
+  "description": "Lambda function for Klaviyo email signup",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.450.0",
+    "@aws-sdk/lib-dynamodb": "^3.450.0",
+    "@aws-sdk/client-secrets-manager": "^3.450.0",
+    "axios": "^1.6.0"
+  }
+} 
