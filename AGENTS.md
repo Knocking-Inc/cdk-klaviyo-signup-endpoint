@@ -10,9 +10,10 @@ AWS CDK (v2) project that deploys a serverless Klaviyo email signup endpoint. It
 
 - `npm install` — Install CDK dependencies (run in root and also `cd lambda && npm install`)
 - `npm run build` — Compile TypeScript (`tsc`)
+- `npm run build-lambda` — Bundle Lambda with esbuild (`cd lambda && npm run build`)
 - `npm run watch` — Compile TypeScript in watch mode
 - `npm test` — Run Jest tests (matches `test/**/*.test.js`)
-- `npm run deploy` — Deploy the CDK stack (`cdk deploy`)
+- `npm run deploy` — Bundle Lambda and deploy the CDK stack (`cdk deploy`)
 - `npm run diff` — Show CDK stack diff (`cdk diff`)
 - `npm run destroy` — Tear down the stack (`cdk destroy`)
 - `./scripts/deploy.sh` — Full deployment script that installs deps, builds, and deploys
@@ -23,7 +24,7 @@ AWS CDK (v2) project that deploys a serverless Klaviyo email signup endpoint. It
 
 - `KlaviyoSignupStack` defines all infrastructure:
   - **DynamoDB** table `klaviyo-signup` with PK `id` and SK `type`. Two GSIs: `DomainStatusIndex` (domain, status) and `StatusTimestampIndex` (status, timestamp). PAY_PER_REQUEST billing with PITR enabled.
-  - **Lambda** (`lambda/index.js`, Node.js 20, `index.handler`) packaged from `lambda/` directory. The Lambda code is plain JS and depends on `@aws-sdk/*` and `axios`.
+  - **Lambda** (`lambda/index.js`, Node.js 20, `index.handler`) bundled with esbuild into `lambda/esbuild-dist/index.js` (CJS format, external `@aws-sdk/*`, bundled `axios`). The CDK `lambda.Code.fromAsset` points to `../lambda/esbuild-dist`.
   - **API Gateway** REST API with two resources: `POST /signup` (API key required) and `POST /query` (no API key required). CORS preflight is handled by the Lambda.
   - **Usage Plan** with rate limit 100 req/s, burst 200, daily quota 500k.
   - **ApiKey** created via CDK. A `AwsCustomResource` is used to fetch the API key value at deploy time so it can be injected into the Lambda environment (`API_KEY`).
@@ -41,7 +42,8 @@ Key behavioral details:
 
 - **Domain allowlist**: `ALLOWED_DOMAINS` env var is a comma-separated list. Only allowed domains can sign up. The `query` endpoint does not enforce the allowlist but still validates domain format.
 - **Secrets caching**: Secrets are fetched from Secrets Manager and cached in Lambda memory for 5 minutes (`CACHE_DURATION`). Each domain requires three keys in the secret: `KlaviyoPrivateKey_{domain}`, `KlaviyoListId_{domain}`, `KlavioSiteID_{domain}`.
-- **Optional sequence numbers**: By default, no sequence number is generated. When `showQueuePosition: true` is included in the request body, the DynamoDB counter is incremented via `UpdateCommand` with `if_not_exists(#count, :start) + :incr`. The starting counter is **23420** (hardcoded in `lambda/index.js`). When `showQueuePosition` is `false` or omitted, the counter is skipped and `sequenceNumber` is omitted from the response and Klaviyo `custom_source` is `"Website Signup"` without a queue position.
+- **Optional `showQueuePosition`**: By default, no sequence number is generated. When `showQueuePosition: true` is included in the request body, the DynamoDB counter is incremented via `UpdateCommand` with `if_not_exists(#count, :start) + :incr`. The starting counter is **23420** (hardcoded in `lambda/index.js`). When `showQueuePosition` is `false` or omitted, the counter is skipped and `sequenceNumber` is omitted from the response.
+- **Optional `customSource`**: An optional `customSource` string in the request body overrides the default `"Website Signup"` value sent to Klaviyo as `custom_source`. If `showQueuePosition: true` and a sequence number is generated, it is appended to the custom source as `"{customSource} - Sequence: {number}"`.
 - **Idempotency**: On signup, the Lambda first checks if a `success` record already exists for the email+domain hash. If found:
   - If the existing record has a `sequence_number` and `showQueuePosition` is `true`, it returns that number with `alreadySubscribed: true`.
   - If the existing record has no `sequence_number` but `showQueuePosition` is `true`, it generates a new sequence number and proceeds with a new signup (treating it as a retry with queue position enabled).
@@ -55,7 +57,7 @@ Key behavioral details:
 ### Tests (`test/`)
 
 - `signup.test.js` — Comprehensive validation tests (API key, email/domain format, CORS, duplicate handling, query endpoint)
-- `query-retry.test.js` — Tests retry logic with mocked timers (`jest.useFakeTimers`)
+- `query-retry.test.js` — Tests retry logic with mocked `setTimeout`
 - `query-retry-simple.test.js` — Standalone unit tests for retry loop math and setTimeout mocking
 
 Tests mock AWS SDK clients and `axios` via `jest.mock`.
@@ -71,7 +73,7 @@ To support additional domains, you must update **three** places:
 ## Notes for Agents
 
 - When modifying the Lambda, remember dependencies are split: CDK deps are in root `package.json`, Lambda runtime deps are in `lambda/package.json`.
-- The Lambda is **not** a TypeScript Lambda construct with bundling; it is deployed as raw JS via `lambda.Code.fromAsset`. Changes to `lambda/index.js` do not require a `tsc` build, but the CDK app itself is TypeScript and must be compiled before deploying.
-- The `test` directory uses `jest` with `testMatch: "**/test/**/*.test.js"`. There is no separate test config file; Jest config is inlined in `package.json`.
+- The Lambda is **not** a TypeScript Lambda construct with bundling; it is built with esbuild to `lambda/esbuild-dist/index.js` and the CDK stack points `lambda.Code.fromAsset` to `../lambda/esbuild-dist`. Changes to `lambda/index.js` do not require a `tsc` build, but they **do** require `npm run build-lambda` before deploying. The CDK app itself is TypeScript and must be compiled before deploying.
+- The `test` directory uses `jest` with `testMatch: "**/test/**/*.test.js"`. There is no separate test config file; Jest config is inlined in `package.json`. The config includes `moduleNameMapper` to force `axios` and `@aws-sdk/*` to resolve from the root `node_modules`, avoiding duplicate-module issues when `lambda/node_modules` also contains these packages.
 - The deploy script (`scripts/deploy.sh`) runs `npm install` in both root and `lambda/` before building and deploying. Use it if you want a one-shot deployment, or use the individual `npm run` commands for incremental work.
 - Do not change the DynamoDB `RemovalPolicy.DESTROY` without awareness; this is currently set for development and will delete the table on stack destruction.
