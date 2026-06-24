@@ -1,111 +1,130 @@
 <!DOCTYPE html>
-<!-- 
-    Klaviyo Signup Page Example
-    
-    This example demonstrates how to integrate with the Klaviyo signup API endpoint.
-    
+<!--
+    Klaviyo Signup API Test Page
+
+    This page provides a convenient UI for testing all API features:
+    - Signup endpoint with optional showQueuePosition and customSource
+    - Query endpoint with optional retry
+
     Configuration:
-    - API_ENDPOINT: Your deployed API Gateway endpoint
-    - API_KEY: Your API key for authentication
-    - DOMAIN: The domain for this signup (must be in ALLOWED_DOMAINS)
-    
+    - API_BASE: Your deployed API Gateway base URL (no trailing /signup or /query)
+    - API_KEY: Your API key for the signup endpoint
+    - DEFAULT_DOMAIN: The domain for testing (must be in ALLOWED_DOMAINS)
+
     IMPORTANT: LOCAL TESTING REQUIREMENTS
     =====================================
-    This page will only work locally if 'localhost' is added to the ALLOWED_DOMAINS
-    environment variable in your CDK stack. This is NOT recommended for production!
-    
+    This page will only work locally if 'localhost' is added to ALLOWED_DOMAINS
+    in your CDK stack. This is NOT recommended for production!
+
     For local testing:
-    1. Ensure 'localhost' is in ALLOWED_DOMAINS in your CDK stack
-    2. Use 'localhost' as the DOMAIN constant below
-    3. Access via http://localhost:8000/signup-page.html
-    
-    For production:
-    1. Remove 'localhost' from ALLOWED_DOMAINS in your CDK stack
-    2. Change DOMAIN to your actual domain (e.g., 'moviexclusives.com')
-    3. Deploy the updated stack
-    
-    SECURITY NOTE: The 'localhost' domain should NEVER be allowed in production
-    environments as it could allow unauthorized access to your signup endpoint.
-    
+    1. Ensure 'localhost' is in ALLOWED_DOMAINS
+    2. Use 'localhost' as DEFAULT_DOMAIN below
+    3. Serve via: python3 -m http.server 8000
+    4. Open http://localhost:8000/signup-page.html
+
     Current configuration:
     - Domain: localhost (for local testing only)
     - API Key: NvhGCoJLH38y2bxdIqdbO4H7btCvDgIa6tmGgNB4
-    - Endpoint: https://ajocgvomn1.execute-api.us-east-1.amazonaws.com/prod/signup
+    - Base Endpoint: https://ajocgvomn1.execute-api.us-east-1.amazonaws.com/prod
 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Signup</title>
+    <title>Klaviyo Signup API Test</title>
     <style>
+        * { box-sizing: border-box; }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             margin: 0;
-            padding: 0;
+            padding: 20px;
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
 
-        .container {
-            background: white;
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            max-width: 400px;
-            text-align: center;
+        .wrapper {
+            max-width: 800px;
+            margin: 0 auto;
         }
 
         h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            margin-top: 0;
             color: #333;
-            margin-bottom: 1rem;
-            font-size: 2rem;
+            font-size: 1.4rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
         }
 
-        p {
-            color: #666;
-            margin-bottom: 2rem;
-            line-height: 1.6;
+        .form-group { margin-bottom: 16px; }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: #444;
+            font-size: 14px;
         }
 
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-
-        input[type="email"] {
+        input[type="email"], input[type="text"] {
             width: 100%;
-            padding: 12px 16px;
+            padding: 10px 14px;
             border: 2px solid #e1e5e9;
             border-radius: 8px;
-            font-size: 16px;
+            font-size: 15px;
             transition: border-color 0.3s ease;
-            box-sizing: border-box;
         }
 
-        input[type="email"]:focus {
-            outline: none;
-            border-color: #667eea;
+        input:focus { outline: none; border-color: #667eea; }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            margin: 0;
+            font-weight: 500;
+            cursor: pointer;
         }
 
         button {
-            width: 100%;
-            padding: 12px 16px;
+            padding: 12px 20px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
             border-radius: 8px;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s ease;
+            transition: transform 0.2s ease, opacity 0.2s ease;
         }
 
-        button:hover {
-            transform: translateY(-2px);
-        }
+        button:hover { transform: translateY(-2px); }
 
         button:disabled {
             opacity: 0.6;
@@ -113,143 +132,243 @@
             transform: none;
         }
 
-        .message {
-            margin-top: 1rem;
-            padding: 12px;
-            border-radius: 8px;
-            font-weight: 500;
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
         }
 
-        .success {
+        .response {
+            margin-top: 16px;
+            padding: 14px;
+            border-radius: 8px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            display: none;
+        }
+
+        .response.success {
             background: #d4edda;
             color: #155724;
             border: 1px solid #c3e6cb;
+            display: block;
         }
 
-        .error {
+        .response.error {
             background: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
+            display: block;
         }
 
-        .sequence-number {
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: #667eea;
+        .response.info {
+            background: #e2e3e5;
+            color: #383d41;
+            border: 1px solid #d6d8db;
+            display: block;
+        }
+
+        .hint {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .section-divider {
+            text-align: center;
+            color: white;
+            font-weight: 600;
+            margin: 30px 0;
+            font-size: 1.1rem;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Stay Updated</h1>
-        <p>Subscribe to our newsletter and be the first to know about new updates and features!</p>
-        
-        <form id="signupForm">
+    <div class="wrapper">
+        <h1>Klaviyo Signup API Test</h1>
+
+        <div class="card">
+            <h2>Configuration</h2>
             <div class="form-group">
-                <input 
-                    type="email" 
-                    id="emailInput" 
-                    placeholder="Enter your email address" 
-                    required
-                >
+                <label for="apiBase">API Base URL</label>
+                <input type="text" id="apiBase" value="https://ajocgvomn1.execute-api.us-east-1.amazonaws.com/prod">
             </div>
-            <button type="submit" id="submitBtn">Subscribe</button>
-        </form>
-        
-        <div id="message" class="message" style="display: none;"></div>
+            <div class="form-group">
+                <label for="apiKey">API Key</label>
+                <input type="text" id="apiKey" value="NvhGCoJLH38y2bxdIqdbO4H7btCvDgIa6tmGgNB4">
+            </div>
+            <div class="form-group">
+                <label for="defaultDomain">Default Domain</label>
+                <input type="text" id="defaultDomain" value="localhost">
+                <div class="hint">Must be in ALLOWED_DOMAINS. Use 'localhost' for local testing.</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Signup Endpoint (POST /signup)</h2>
+            <div class="form-group">
+                <label for="signupEmail">Email</label>
+                <input type="email" id="signupEmail" placeholder="test@example.com">
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="showQueuePosition">
+                <label for="showQueuePosition">showQueuePosition — generate and return sequence number</label>
+            </div>
+            <div class="form-group">
+                <label for="customSource">Custom Source (optional)</label>
+                <input type="text" id="customSource" placeholder="Website Signup">
+                <div class="hint">Overrides the default "Website Signup" string sent to Klaviyo.</div>
+            </div>
+            <div class="btn-row">
+                <button id="signupBtn" onclick="doSignup()">Send Signup</button>
+                <button id="signupPreflightBtn" onclick="doPreflight()">Send CORS Preflight</button>
+            </div>
+            <div id="signupResponse" class="response"></div>
+        </div>
+
+        <div class="section-divider">- - -</div>
+
+        <div class="card">
+            <h2>Query Endpoint (POST /query)</h2>
+            <div class="form-group">
+                <label for="queryEmail">Email</label>
+                <input type="email" id="queryEmail" placeholder="test@example.com">
+            </div>
+            <div class="form-group">
+                <label for="queryDomain">Domain</label>
+                <input type="text" id="queryDomain" placeholder="localhost">
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="queryRetry">
+                <label for="queryRetry">retry=true — retry up to 5 times for eventual consistency</label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="queryShowQueue">
+                <label for="queryShowQueue">showQueuePosition — include sequence number in response if available</label>
+            </div>
+            <div class="btn-row">
+                <button id="queryBtn" onclick="doQuery()">Send Query</button>
+            </div>
+            <div id="queryResponse" class="response"></div>
+        </div>
     </div>
 
     <script>
-        // Configuration - Update these values with your actual API details
-        const API_ENDPOINT = 'https://ajocgvomn1.execute-api.us-east-1.amazonaws.com/prod/signup';
-        const API_KEY = 'NvhGCoJLH38y2bxdIqdbO4H7btCvDgIa6tmGgNB4';
-        const DOMAIN = 'localhost'; // Use 'localhost' for local testing, 'moviexclusives.com' for production
-        
-        // SECURITY NOTE: 'localhost' is only allowed for development testing.
-        // In production, use your actual domain (e.g., 'moviexclusives.com').
-        // The API key provides authentication, but domain validation adds an extra security layer.
-
-        const form = document.getElementById('signupForm');
-        const emailInput = document.getElementById('emailInput');
-        const submitBtn = document.getElementById('submitBtn');
-        const messageDiv = document.getElementById('message');
-
-        function showMessage(text, isSuccess = false) {
-            messageDiv.textContent = text;
-            messageDiv.className = `message ${isSuccess ? 'success' : 'error'}`;
-            messageDiv.style.display = 'block';
+        function getConfig() {
+            return {
+                apiBase: document.getElementById('apiBase').value.trim().replace(/\/$/, ''),
+                apiKey: document.getElementById('apiKey').value.trim(),
+                defaultDomain: document.getElementById('defaultDomain').value.trim()
+            };
         }
 
-        function hideMessage() {
-            messageDiv.style.display = 'none';
+        function showResponse(elementId, text, type) {
+            const el = document.getElementById(elementId);
+            el.textContent = text;
+            el.className = 'response ' + (type || 'info');
         }
 
-        async function signupEmail(email) {
-            try {
-                const response = await fetch(API_ENDPOINT, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-API-Key': API_KEY
-                    },
-                    body: JSON.stringify({ 
-                        email: email,
-                        domain: DOMAIN,
-                        showQueuePosition: false
-                    })
-                });
-
-                const result = await response.json();
-                
-                if (response.ok) {
-                    return result;
-                } else {
-                    throw new Error(result.message || 'Signup failed');
-                }
-            } catch (error) {
-                console.error('Signup error:', error);
-                throw error;
-            }
+        function setLoading(id, loading) {
+            const btn = document.getElementById(id);
+            btn.disabled = loading;
+            btn.textContent = loading ? 'Sending...' : btn.getAttribute('data-original') || btn.textContent;
         }
 
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const email = emailInput.value.trim();
-            
+        document.querySelectorAll('button').forEach(btn => {
+            btn.setAttribute('data-original', btn.textContent);
+        });
+
+        async function doSignup() {
+            const cfg = getConfig();
+            const email = document.getElementById('signupEmail').value.trim();
+            const showQueuePosition = document.getElementById('showQueuePosition').checked;
+            const customSource = document.getElementById('customSource').value.trim() || undefined;
+
             if (!email) {
-                showMessage('Please enter a valid email address');
+                showResponse('signupResponse', 'Error: Please enter an email address.', 'error');
                 return;
             }
 
-            // Disable form during submission
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Subscribing...';
-            hideMessage();
+            setLoading('signupBtn', true);
+            showResponse('signupResponse', 'Sending...', 'info');
+
+            const payload = { email, domain: cfg.defaultDomain, showQueuePosition };
+            if (customSource) payload.customSource = customSource;
 
             try {
-                const result = await signupEmail(email);
-                
-                // Show success message (with optional sequence number)
-                const message = result.sequenceNumber 
-                    ? `Welcome! You are subscriber #${result.sequenceNumber}.`
-                    : `Welcome! You have been subscribed successfully.`;
-                showMessage(message, true);
-                
-                // Clear form
-                form.reset();
-                
-            } catch (error) {
-                showMessage(error.message || 'An error occurred. Please try again.');
-            } finally {
-                // Re-enable form
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Subscribe';
-            }
-        });
+                const response = await fetch(`${cfg.apiBase}/signup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-API-Key': cfg.apiKey },
+                    body: JSON.stringify(payload)
+                });
 
-        // Clear message when user starts typing
-        emailInput.addEventListener('input', hideMessage);
+                const result = await response.json();
+                const output = { status: response.status, statusText: response.statusText, body: result };
+                showResponse('signupResponse', JSON.stringify(output, null, 2), response.ok ? 'success' : 'error');
+            } catch (err) {
+                showResponse('signupResponse', 'Network / Fetch Error:\n' + err.message, 'error');
+            } finally {
+                setLoading('signupBtn', false);
+            }
+        }
+
+        async function doPreflight() {
+            const cfg = getConfig();
+            setLoading('signupPreflightBtn', true);
+            showResponse('signupResponse', 'Sending OPTIONS...', 'info');
+
+            try {
+                const response = await fetch(`${cfg.apiBase}/signup`, {
+                    method: 'OPTIONS',
+                    headers: { 'Origin': window.location.origin }
+                });
+                const output = { status: response.status, statusText: response.statusText, headers: Object.fromEntries(response.headers.entries()) };
+                showResponse('signupResponse', JSON.stringify(output, null, 2), 'success');
+            } catch (err) {
+                showResponse('signupResponse', 'Network / Fetch Error:\n' + err.message, 'error');
+            } finally {
+                setLoading('signupPreflightBtn', false);
+            }
+        }
+
+        async function doQuery() {
+            const cfg = getConfig();
+            const email = document.getElementById('queryEmail').value.trim();
+            const domain = document.getElementById('queryDomain').value.trim() || cfg.defaultDomain;
+            const retry = document.getElementById('queryRetry').checked;
+            const showQueuePosition = document.getElementById('queryShowQueue').checked;
+
+            if (!email) {
+                showResponse('queryResponse', 'Error: Please enter an email address.', 'error');
+                return;
+            }
+
+            setLoading('queryBtn', true);
+            showResponse('queryResponse', 'Sending...', 'info');
+
+            const url = new URL(`${cfg.apiBase}/query`);
+            if (retry) url.searchParams.set('retry', 'true');
+
+            const payload = { email, domain, showQueuePosition };
+
+            try {
+                const response = await fetch(url.toString(), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                const output = { status: response.status, statusText: response.statusText, body: result };
+                showResponse('queryResponse', JSON.stringify(output, null, 2), response.ok ? 'success' : 'error');
+            } catch (err) {
+                showResponse('queryResponse', 'Network / Fetch Error:\n' + err.message, 'error');
+            } finally {
+                setLoading('queryBtn', false);
+            }
+        }
     </script>
 </body>
-</html> 
+</html>
