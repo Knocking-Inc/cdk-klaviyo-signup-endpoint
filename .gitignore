@@ -1,5 +1,6 @@
 node_modules/
 cdk.out/
+esbuild-dist/
 *.js.map
 coverage/
 .env

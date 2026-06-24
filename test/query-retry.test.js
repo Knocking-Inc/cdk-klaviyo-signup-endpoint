@@ -25,6 +25,10 @@ jest.doMock('@aws-sdk/client-secrets-manager', () => ({
   GetSecretValueCommand: jest.fn()
 }));
 
+jest.doMock('axios', () => ({
+  post: jest.fn()
+}));
+
 const { handler } = require('../lambda/index');
 
 describe('Query Endpoint Retry Functionality', () => {

@@ -81,10 +81,11 @@ export class KlaviyoSignupStack extends cdk.Stack {
     });
 
     // Lambda function for the signup endpoint
+    // Uses esbuild-dist/ which contains the bundled output (includes axios, excludes aws-sdk)
     const signupFunction = new lambda.Function(this, 'SignupFunction', {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda')),
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/esbuild-dist')),
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       environment: {

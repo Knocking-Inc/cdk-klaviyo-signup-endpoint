@@ -28,13 +28,20 @@ cd lambda
 npm install
 cd ..
 
-# Build the project
-echo "🔨 Building the project..."
+# Build the TypeScript CDK project
+echo "🔨 Building the CDK project..."
 npm run build
+
+# Bundle the Lambda code with esbuild
+echo "📦 Bundling Lambda code with esbuild..."
+cd lambda
+npm run build
+cd ..
 
 # Deploy the stack
 echo "🚀 Deploying to AWS..."
-npm run deploy
+# NOTE: deploy script already includes build-lambda, so cdk deploy is sufficient
+npx cdk deploy
 
 echo "✅ Deployment completed successfully!"
 echo ""
