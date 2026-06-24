@@ -92,7 +92,7 @@ export class KlaviyoSignupStack extends cdk.Stack {
         SEQUENCE_TABLE_NAME: signupTable.tableName,
         SECRETS_NAME: 'prod/klaviyosignups',
         API_KEY: getApiKeyValue.getResponseField('value'),
-        ALLOWED_DOMAINS: 'moviexclusives.com,localhost', // Comma-separated list
+ALLOWED_DOMAINS: 'moviexclusives.com,localhost,cbsdeals.com,americasstealsanddeals.com,localstealsanddeals.com', // Comma-separated list
       },
       logRetention: logs.RetentionDays.ONE_WEEK,
     });
