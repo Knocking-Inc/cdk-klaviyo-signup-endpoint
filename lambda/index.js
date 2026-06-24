@@ -234,15 +234,15 @@ async function storeSignupRecord(email, sequenceNumber, domain, status, errorMes
 }
 
 // Helper function to add email to Klaviyo list
-async function addToKlaviyoList(email, sequenceNumber, domain) {
+async function addToKlaviyoList(email, sequenceNumber, domain, customSource = 'Website Signup') {
   try {
     console.log('Retrieving Klaviyo secrets for domain', { domain });
     const secrets = await getSecrets(domain);
     console.log('Klaviyo secrets retrieved', { domain, hasApiKey: !!secrets.klaviyoApiKey, hasListId: !!secrets.klaviyoListId });
     
-    const customSource = sequenceNumber !== null && sequenceNumber !== undefined
-      ? `Website Signup - Sequence: ${sequenceNumber}`
-      : 'Website Signup';
+    if (sequenceNumber !== null && sequenceNumber !== undefined) {
+      customSource = `${customSource} - Sequence: ${sequenceNumber}`;
+    }
     
     // Use bulk subscription job to set subscription status and add to list
     const bulkJobPayload = {
@@ -397,6 +397,7 @@ function validateRequest(event) {
 
   const { email, domain } = requestBody;
   const showQueuePosition = !!requestBody.showQueuePosition;
+  const customSource = requestBody.customSource || 'Website Signup';
 
   if (!email || !isValidEmail(email)) {
     console.log('Email validation failed', { email: email ? email.substring(0, 3) + '***' : 'missing', domain });
@@ -428,8 +429,8 @@ function validateRequest(event) {
     };
   }
 
-  console.log('All validations passed', { email: email.substring(0, 3) + '***', domain, showQueuePosition });
-  return { email, domain, showQueuePosition };
+  console.log('All validations passed', { email: email.substring(0, 3) + '***', domain, showQueuePosition, customSource });
+  return { email, domain, showQueuePosition, customSource };
 }
 
 // Helper function to handle errors
@@ -534,8 +535,8 @@ exports.handler = async (event) => {
 async function handleSignupRequest(event, actualOrigin) {
   try {
     // Validate request and extract email/domain
-    const { email, domain, showQueuePosition } = validateRequest(event);
-    console.log('Request validated', { email: email.substring(0, 3) + '***', domain, showQueuePosition });
+    const { email, domain, showQueuePosition, customSource } = validateRequest(event);
+    console.log('Request validated', { email: email.substring(0, 3) + '***', domain, showQueuePosition, customSource });
 
     // Check if email already exists for this domain
     console.log('Checking if email already exists', { email: email.substring(0, 3) + '***', domain });
@@ -601,9 +602,9 @@ async function handleSignupRequest(event, actualOrigin) {
       console.log('Skipping sequence number generation (showQueuePosition is false)', { domain });
     }
 
-    console.log('Adding email to Klaviyo list', { email: email.substring(0, 3) + '***', domain });
-    await addToKlaviyoList(email, sequenceNumber, domain);
-    console.log('Email successfully added to Klaviyo', { email: email.substring(0, 3) + '***', domain, sequenceNumber });
+    console.log('Adding email to Klaviyo list', { email: email.substring(0, 3) + '***', domain, customSource });
+    await addToKlaviyoList(email, sequenceNumber, domain, customSource);
+    console.log('Email successfully added to Klaviyo', { email: email.substring(0, 3) + '***', domain, sequenceNumber, customSource });
 
     // Store successful signup record
     await storeSignupRecord(email, sequenceNumber, domain, 'success');

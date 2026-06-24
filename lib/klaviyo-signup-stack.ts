@@ -177,6 +177,10 @@ export class KlaviyoSignupStack extends cdk.Stack {
                 type: apigateway.JsonSchemaType.BOOLEAN,
                 description: 'Whether to generate and return a sequence number',
               },
+              customSource: {
+                type: apigateway.JsonSchemaType.STRING,
+                description: 'Custom source string for Klaviyo (default: Website Signup)',
+              },
             },
           },
         }),

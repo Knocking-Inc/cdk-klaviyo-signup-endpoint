@@ -650,4 +650,67 @@ describe('Signup Lambda Function', () => {
     expect(body.sequenceNumber).toBe(42);
     expect(body.alreadySubscribed).toBe(false);
   });
+
+  test('should use custom customSource when provided', async () => {
+    // Mock no existing record found
+    mockDynamoDB.send.mockResolvedValueOnce({ Item: null });
+
+    const event = {
+      httpMethod: 'POST',
+      headers: {
+        'x-api-key': 'test-api-key',
+        origin: 'https://moviexclusives.com'
+      },
+      body: JSON.stringify({
+        email: 'custom@example.com',
+        domain: 'moviexclusives.com',
+        showQueuePosition: false,
+        customSource: 'Newsletter Signup'
+      })
+    };
+
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body.success).toBe(true);
+    expect(body.message).toBe('Email successfully subscribed');
+    expect(body.sequenceNumber).toBeUndefined();
+
+    // Verify Klaviyo API was called with the custom source
+    const klaviyoCall = mockAxios.post.mock.calls[0];
+    const payload = klaviyoCall[1];
+    expect(payload.data.attributes.custom_source).toBe('Newsletter Signup');
+  });
+
+  test('should append sequence number to custom customSource when showQueuePosition is true', async () => {
+    // Mock no existing record found
+    mockDynamoDB.send.mockResolvedValueOnce({ Item: null });
+
+    const event = {
+      httpMethod: 'POST',
+      headers: {
+        'x-api-key': 'test-api-key',
+        origin: 'https://moviexclusives.com'
+      },
+      body: JSON.stringify({
+        email: 'customseq@example.com',
+        domain: 'moviexclusives.com',
+        showQueuePosition: true,
+        customSource: 'Product Launch'
+      })
+    };
+
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body.success).toBe(true);
+    expect(body.sequenceNumber).toBe(42);
+
+    // Verify Klaviyo API was called with the custom source + sequence number
+    const klaviyoCall = mockAxios.post.mock.calls[0];
+    const payload = klaviyoCall[1];
+    expect(payload.data.attributes.custom_source).toBe('Product Launch - Sequence: 42');
+  });
 }); 
