@@ -32,7 +32,8 @@ function getCorsHeaders(domain, actualOrigin = null) {
   if (actualOrigin.includes('localhost') || 
       actualOrigin.includes('127.0.0.1') || 
       actualOrigin.includes('framercanvas.com') ||
-      actualOrigin.includes('framer.app')) {
+      actualOrigin.includes('framer.app') ||
+      actualOrigin.includes('knockingdevelop.com')) {
     return {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Headers': 'Content-Type,X-API-Key',
