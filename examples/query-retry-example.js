@@ -12,17 +12,19 @@ const axios = require('axios');
 // Configuration - Update these with your actual values
 const API_ENDPOINT = 'https://your-api-id.execute-api.your-region.amazonaws.com/prod/query';
 
-async function querySignupRecord(email, domain, retry = false) {
+async function querySignupRecord(email, domain, retry = false, showQueuePosition = false) {
   try {
     const url = retry ? `${API_ENDPOINT}?retry=true` : API_ENDPOINT;
     
     console.log(`Querying signup record for: ${email} on domain: ${domain}`);
     console.log(`Retry enabled: ${retry}`);
+    console.log(`Show queue position: ${showQueuePosition}`);
     console.log(`URL: ${url}`);
     
     const response = await axios.post(url, {
       email: email,
-      domain: domain
+      domain: domain,
+      showQueuePosition: showQueuePosition
     }, {
       headers: {
         'Content-Type': 'application/json'
@@ -34,7 +36,8 @@ async function querySignupRecord(email, domain, retry = false) {
     console.log('Response:', JSON.stringify(result, null, 2));
     
     if (result.found) {
-      console.log(`✅ Record found! Subscriber #${result.sequenceNumber} for ${result.domain}`);
+      const seqInfo = result.sequenceNumber ? `Subscriber #${result.sequenceNumber}` : 'Record found';
+      console.log(`✅ ${seqInfo} for ${result.domain}`);
       console.log(`   Attempts: ${result.attempts}`);
     } else {
       console.log(`❌ No record found for ${email} on ${domain}`);

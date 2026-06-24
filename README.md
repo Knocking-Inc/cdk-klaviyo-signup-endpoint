@@ -6,7 +6,7 @@ A serverless email signup endpoint built with AWS CDK that integrates with Klavi
 
 - **Email Signup Endpoint**: REST API endpoint for email subscriptions
 - **Klaviyo Integration**: Automatically adds emails to your Klaviyo list
-- **Sequence Numbers**: Generates unique incremental numbers for each subscriber
+- **Optional Sequence Numbers**: Generates unique incremental numbers only when `showQueuePosition=true` is provided
 - **Security**: API key authentication, domain restrictions, and rate limiting
 - **CORS Support**: Configured for web application integration with domain-specific origins
 - **Unified DynamoDB Storage**: Single table design for sequence counters and audit records
@@ -114,11 +114,17 @@ X-API-Key: your-api-key-here
 ```json
 {
   "email": "user@example.com",
-  "domain": "moviexclusives.com"
+  "domain": "moviexclusives.com",
+  "showQueuePosition": true
 }
 ```
 
-**Success Response** (200) - New Subscription:
+**Request Parameters**:
+- `email` (required): The email address to subscribe
+- `domain` (required): The signup domain (must be in `ALLOWED_DOMAINS`)
+- `showQueuePosition` (optional): When `true`, generates and returns a sequence number. Defaults to `false`.
+
+**Success Response** (200) - New Subscription with `showQueuePosition: true`:
 ```json
 {
   "success": true,
@@ -130,7 +136,18 @@ X-API-Key: your-api-key-here
 }
 ```
 
-**Success Response** (200) - Already Subscribed:
+**Success Response** (200) - New Subscription with `showQueuePosition: false` (default):
+```json
+{
+  "success": true,
+  "message": "Email successfully subscribed",
+  "email": "user@example.com",
+  "domain": "moviexclusives.com",
+  "alreadySubscribed": false
+}
+```
+
+**Success Response** (200) - Already Subscribed with `showQueuePosition: true`:
 ```json
 {
   "success": true,
@@ -160,11 +177,12 @@ Content-Type: application/json
 ```json
 {
   "email": "user@example.com",
-  "domain": "moviexclusives.com"
+  "domain": "moviexclusives.com",
+  "showQueuePosition": true
 }
 ```
 
-**Success Response** (200) - Record Found:
+**Success Response** (200) - Record Found with `showQueuePosition: true`:
 ```json
 {
   "success": true,
@@ -172,6 +190,20 @@ Content-Type: application/json
   "email": "user@example.com",
   "domain": "moviexclusives.com",
   "sequenceNumber": 42,
+  "status": "success",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "emailHash": "sha256-hash-of-email",
+  "attempts": 1
+}
+```
+
+**Success Response** (200) - Record Found without `showQueuePosition`:
+```json
+{
+  "success": true,
+  "found": true,
+  "email": "user@example.com",
+  "domain": "moviexclusives.com",
   "status": "success",
   "timestamp": "2024-01-15T10:30:00.000Z",
   "emailHash": "sha256-hash-of-email",
@@ -219,7 +251,7 @@ Content-Type: application/json
 ### Frontend Integration Example
 
 ```javascript
-async function signupEmail(email, domain) {
+async function signupEmail(email, domain, showQueuePosition = false) {
   try {
     const response = await fetch('https://[api-id].execute-api.[region].amazonaws.com/prod/signup', {
       method: 'POST',
@@ -227,13 +259,17 @@ async function signupEmail(email, domain) {
         'Content-Type': 'application/json',
         'X-API-Key': 'your-api-key-here'
       },
-      body: JSON.stringify({ email, domain })
+      body: JSON.stringify({ email, domain, showQueuePosition })
     });
 
     const result = await response.json();
     
     if (response.ok) {
-      console.log(`Success! You are subscriber #${result.sequenceNumber} for ${result.domain}`);
+      if (result.sequenceNumber) {
+        console.log(`Success! You are subscriber #${result.sequenceNumber} for ${result.domain}`);
+      } else {
+        console.log(`Success! Email subscribed to ${result.domain}`);
+      }
       return result;
     } else {
       throw new Error(result.message);
@@ -252,7 +288,7 @@ A complete HTML signup page is provided in `examples/signup-page.html` for testi
 - Modern, responsive design
 - Real-time form validation
 - Error handling and user feedback
-- Sequence number display
+- Optional sequence number display
 - Security warnings for localhost usage
 
 To use the example page:
@@ -321,7 +357,7 @@ The system stores all signup attempts in a unified DynamoDB table for monitoring
   "id": "sha256-hash-of-email",
   "type": "record",
   "domain": "moviexclusives.com",
-  "sequence_number": 42,
+  "sequence_number": null,
   "status": "success|error",
   "timestamp": "2024-01-15T10:30:00.000Z",
   "created_at": "2024-01-15T10:30:00.000Z",
@@ -381,6 +417,26 @@ node scripts/query-signup-records.js email user@example.com
 | `SECRETS_NAME` | AWS Secrets Manager secret name containing Klaviyo credentials | Yes |
 | `API_KEY` | Custom API key for authentication | Yes |
 | `ALLOWED_DOMAINS` | Comma-separated list of allowed signup domains | Yes |
+
+### Optional Sequence Number Behavior
+
+By default, the signup endpoint does **not** generate or return a sequence number. This is the recommended behavior for most use cases to avoid revealing subscriber counts.
+
+To enable sequence number generation, set `showQueuePosition: true` in the signup request body:
+
+```json
+{
+  "email": "user@example.com",
+  "domain": "moviexclusives.com",
+  "showQueuePosition": true
+}
+```
+
+When `showQueuePosition` is:
+- **`true`**: The DynamoDB counter is incremented, the sequence number is stored in the signup record, and returned in the response.
+- **`false` or omitted**: No counter is generated, `sequenceNumber` is omitted from the response, and the `custom_source` sent to Klaviyo is `"Website Signup"` without a queue position.
+
+The query endpoint also supports `showQueuePosition` to conditionally include the sequence number in the returned record.
 
 ### Secrets Manager Configuration
 

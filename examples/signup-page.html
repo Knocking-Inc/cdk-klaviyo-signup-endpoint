@@ -194,7 +194,8 @@
                     },
                     body: JSON.stringify({ 
                         email: email,
-                        domain: DOMAIN
+                        domain: DOMAIN,
+                        showQueuePosition: false
                     })
                 });
 
@@ -229,11 +230,11 @@
             try {
                 const result = await signupEmail(email);
                 
-                // Show success message with sequence number
-                showMessage(
-                    `Welcome! You are subscriber #${result.sequenceNumber}.`,
-                    true
-                );
+                // Show success message (with optional sequence number)
+                const message = result.sequenceNumber 
+                    ? `Welcome! You are subscriber #${result.sequenceNumber}.`
+                    : `Welcome! You have been subscribed successfully.`;
+                showMessage(message, true);
                 
                 // Clear form
                 form.reset();

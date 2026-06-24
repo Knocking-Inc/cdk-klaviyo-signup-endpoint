@@ -173,6 +173,10 @@ export class KlaviyoSignupStack extends cdk.Stack {
                 type: apigateway.JsonSchemaType.STRING,
                 description: 'Domain for the signup (e.g., moviexclusives.com)',
               },
+              showQueuePosition: {
+                type: apigateway.JsonSchemaType.BOOLEAN,
+                description: 'Whether to generate and return a sequence number',
+              },
             },
           },
         }),
@@ -217,6 +221,10 @@ export class KlaviyoSignupStack extends cdk.Stack {
               domain: {
                 type: apigateway.JsonSchemaType.STRING,
                 description: 'Domain for the query (e.g., moviexclusives.com)',
+              },
+              showQueuePosition: {
+                type: apigateway.JsonSchemaType.BOOLEAN,
+                description: 'Whether to include the sequence number in the response',
               },
             },
           },

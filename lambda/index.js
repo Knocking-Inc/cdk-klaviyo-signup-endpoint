@@ -240,6 +240,10 @@ async function addToKlaviyoList(email, sequenceNumber, domain) {
     const secrets = await getSecrets(domain);
     console.log('Klaviyo secrets retrieved', { domain, hasApiKey: !!secrets.klaviyoApiKey, hasListId: !!secrets.klaviyoListId });
     
+    const customSource = sequenceNumber !== null && sequenceNumber !== undefined
+      ? `Website Signup - Sequence: ${sequenceNumber}`
+      : 'Website Signup';
+    
     // Use bulk subscription job to set subscription status and add to list
     const bulkJobPayload = {
       data: {
@@ -263,7 +267,7 @@ async function addToKlaviyoList(email, sequenceNumber, domain) {
             ]
           },
           historical_import: false,
-          custom_source: `Website Signup - Sequence: ${sequenceNumber}`
+          custom_source: customSource
         },
         relationships: {
           list: {
@@ -392,6 +396,7 @@ function validateRequest(event) {
   }
 
   const { email, domain } = requestBody;
+  const showQueuePosition = !!requestBody.showQueuePosition;
 
   if (!email || !isValidEmail(email)) {
     console.log('Email validation failed', { email: email ? email.substring(0, 3) + '***' : 'missing', domain });
@@ -423,8 +428,8 @@ function validateRequest(event) {
     };
   }
 
-  console.log('All validations passed', { email: email.substring(0, 3) + '***', domain });
-  return { email, domain };
+  console.log('All validations passed', { email: email.substring(0, 3) + '***', domain, showQueuePosition });
+  return { email, domain, showQueuePosition };
 }
 
 // Helper function to handle errors
@@ -504,7 +509,7 @@ exports.handler = async (event) => {
   // Handle CORS preflight requests
   if (event.httpMethod === 'OPTIONS') {
     
-    console.log('CORS preflight request', { actualOrigin, allowOrigin });
+    console.log('CORS preflight request', { actualOrigin });
     return {
       statusCode: 200,
       headers: {
@@ -529,29 +534,50 @@ exports.handler = async (event) => {
 async function handleSignupRequest(event, actualOrigin) {
   try {
     // Validate request and extract email/domain
-    const { email, domain } = validateRequest(event);
-    console.log('Request validated', { email: email.substring(0, 3) + '***', domain });
+    const { email, domain, showQueuePosition } = validateRequest(event);
+    console.log('Request validated', { email: email.substring(0, 3) + '***', domain, showQueuePosition });
 
     // Check if email already exists for this domain
     console.log('Checking if email already exists', { email: email.substring(0, 3) + '***', domain });
     const existingRecord = await getSignupRecordByEmail(email, domain);
     
     if (existingRecord && existingRecord.status === 'success') {
-      console.log('Email already exists with success status, returning existing record', { 
-        email: email.substring(0, 3) + '***', 
-        domain, 
-        sequenceNumber: existingRecord.sequence_number,
-        status: existingRecord.status
-      });
-      
-      return createResponse(200, {
-        success: true,
-        message: 'Email already subscribed',
-        sequenceNumber: existingRecord.sequence_number,
-        email: email,
-        domain: domain,
-        alreadySubscribed: true
-      }, domain, {}, actualOrigin);
+      if (showQueuePosition) {
+        if (existingRecord.sequence_number !== null && existingRecord.sequence_number !== undefined) {
+          console.log('Email already exists with success status, returning existing record', { 
+            email: email.substring(0, 3) + '***', 
+            domain, 
+            sequenceNumber: existingRecord.sequence_number,
+            status: existingRecord.status
+          });
+          
+          return createResponse(200, {
+            success: true,
+            message: 'Email already subscribed',
+            sequenceNumber: existingRecord.sequence_number,
+            email: email,
+            domain: domain,
+            alreadySubscribed: true
+          }, domain, {}, actualOrigin);
+        }
+        console.log('Email exists with success status but no sequence number, proceeding to generate one', { 
+          email: email.substring(0, 3) + '***', 
+          domain 
+        });
+      } else {
+        console.log('Email already exists with success status, returning without sequence number', { 
+          email: email.substring(0, 3) + '***', 
+          domain, 
+          status: existingRecord.status
+        });
+        return createResponse(200, {
+          success: true,
+          message: 'Email already subscribed',
+          email: email,
+          domain: domain,
+          alreadySubscribed: true
+        }, domain, {}, actualOrigin);
+      }
     }
 
     // Email doesn't exist or has non-success status, proceed with new signup
@@ -566,9 +592,14 @@ async function handleSignupRequest(event, actualOrigin) {
     }
 
     // Main business logic - the common path
-    console.log('Getting sequence number for domain', { domain });
-    const sequenceNumber = await getNextSequenceNumber(domain);
-    console.log('Sequence number generated', { domain, sequenceNumber });
+    let sequenceNumber = null;
+    if (showQueuePosition) {
+      console.log('Getting sequence number for domain', { domain });
+      sequenceNumber = await getNextSequenceNumber(domain);
+      console.log('Sequence number generated', { domain, sequenceNumber });
+    } else {
+      console.log('Skipping sequence number generation (showQueuePosition is false)', { domain });
+    }
 
     console.log('Adding email to Klaviyo list', { email: email.substring(0, 3) + '***', domain });
     await addToKlaviyoList(email, sequenceNumber, domain);
@@ -578,14 +609,17 @@ async function handleSignupRequest(event, actualOrigin) {
     await storeSignupRecord(email, sequenceNumber, domain, 'success');
 
     // Return success response
-    return createResponse(200, {
+    const responseBody = {
       success: true,
       message: 'Email successfully subscribed',
-      sequenceNumber: sequenceNumber,
       email: email,
       domain: domain,
       alreadySubscribed: false
-    }, domain, {}, actualOrigin);
+    };
+    if (showQueuePosition) {
+      responseBody.sequenceNumber = sequenceNumber;
+    }
+    return createResponse(200, responseBody, domain, {}, actualOrigin);
 
   } catch (error) {
     console.log('Error in signup handler', { 
@@ -641,6 +675,7 @@ async function handleQueryRequest(event, actualOrigin) {
     }
 
     const { email, domain } = requestBody;
+    const showQueuePosition = !!requestBody.showQueuePosition;
 
     if (!email || !isValidEmail(email)) {
       console.log('Email validation failed for query', { email: email ? email.substring(0, 3) + '***' : 'missing' });
@@ -686,7 +721,7 @@ async function handleQueryRequest(event, actualOrigin) {
         break;
       }
       
-      if (attempts < maxAttempts) {
+      if (attempts < maxAttempts - 1) {
         console.log('No record found on attempt, waiting before retry', { 
           attempts, 
           maxAttempts,
@@ -699,17 +734,20 @@ async function handleQueryRequest(event, actualOrigin) {
 
     if (record) {
       // Return the record (excluding sensitive fields)
-      return createResponse(200, {
+      const responseBody = {
         success: true,
         found: true,
         email: email,
         domain: record.domain,
-        sequenceNumber: record.sequence_number,
         status: record.status,
         timestamp: record.timestamp,
         emailHash: record.email_hash,
         attempts: attempts
-      }, record.domain, {}, actualOrigin);
+      };
+      if (showQueuePosition && record.sequence_number !== null && record.sequence_number !== undefined) {
+        responseBody.sequenceNumber = record.sequence_number;
+      }
+      return createResponse(200, responseBody, record.domain, {}, actualOrigin);
     } else {
       return createResponse(200, {
         success: true,

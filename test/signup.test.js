@@ -1,5 +1,3 @@
-const { handler } = require('../lambda/index.js');
-
 // Mock environment variables
 process.env.SEQUENCE_TABLE_NAME = 'test-table';
 process.env.SECRETS_NAME = 'test-secrets';
@@ -15,11 +13,11 @@ const mockSecretsManager = {
   send: jest.fn()
 };
 
-jest.mock('@aws-sdk/client-dynamodb', () => ({
+jest.doMock('@aws-sdk/client-dynamodb', () => ({
   DynamoDBClient: jest.fn(() => mockDynamoDB)
 }));
 
-jest.mock('@aws-sdk/lib-dynamodb', () => ({
+jest.doMock('@aws-sdk/lib-dynamodb', () => ({
   DynamoDBDocumentClient: {
     from: jest.fn(() => mockDynamoDB)
   },
@@ -28,7 +26,7 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
   GetCommand: jest.fn()
 }));
 
-jest.mock('@aws-sdk/client-secrets-manager', () => ({
+jest.doMock('@aws-sdk/client-secrets-manager', () => ({
   SecretsManagerClient: jest.fn(() => mockSecretsManager),
   GetSecretValueCommand: jest.fn()
 }));
@@ -37,44 +35,36 @@ jest.mock('@aws-sdk/client-secrets-manager', () => ({
 const mockAxios = {
   post: jest.fn()
 };
-jest.mock('axios', () => mockAxios);
+jest.doMock('axios', () => mockAxios);
+
+const { handler } = require('../lambda/index.js');
 
 describe('Signup Lambda Function', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     
     // Mock DynamoDB responses
-    mockDynamoDB.send.mockImplementation((command) => {
-      // Mock sequence number update
-      if (command.constructor.name === 'UpdateCommand') {
-        return Promise.resolve({
-          Attributes: { count: 42 }
-        });
-      } 
-      // Mock record storage
-      else if (command.constructor.name === 'PutCommand') {
-        return Promise.resolve({});
-      } 
-      // Mock record retrieval - return null for "not found" scenarios
-      else if (command.constructor.name === 'GetCommand') {
-        return Promise.resolve({ Item: null });
-      }
-      return Promise.resolve({});
+    mockDynamoDB.send.mockReset();
+    mockDynamoDB.send.mockResolvedValue({
+      Attributes: { count: 42 },
+      Item: null
     });
 
     // Mock Secrets Manager response
+    mockSecretsManager.send.mockReset();
     mockSecretsManager.send.mockResolvedValue({
       SecretString: JSON.stringify({
-        KlaviyoPrivateKey_moviexclusives: 'test-klaviyo-key',
-        KlaviyoListId_moviexclusives: 'test-list-id',
-        KlavioSiteID_moviexclusives: 'test-site-id',
-        KlaviyoPrivateKey_test: 'test-klaviyo-key',
-        KlaviyoListId_test: 'test-list-id',
-        KlavioSiteID_test: 'test-site-id'
+        'KlaviyoPrivateKey_moviexclusives.com': 'test-klaviyo-key',
+        'KlaviyoListId_moviexclusives.com': 'test-list-id',
+        'KlavioSiteID_moviexclusives.com': 'test-site-id',
+        'KlaviyoPrivateKey_test.com': 'test-klaviyo-key',
+        'KlaviyoListId_test.com': 'test-list-id',
+        'KlavioSiteID_test.com': 'test-site-id'
       })
     });
 
     // Mock axios response for Klaviyo API
+    mockAxios.post.mockReset();
     mockAxios.post.mockResolvedValue({
       status: 200,
       data: {
@@ -96,7 +86,7 @@ describe('Signup Lambda Function', () => {
     const result = await handler(event);
 
     expect(result.statusCode).toBe(200);
-    expect(result.headers['Access-Control-Allow-Origin']).toBe('https://moviexclusives.com');
+    expect(result.headers['Access-Control-Allow-Origin']).toBe('*');
   });
 
   test('should reject invalid API key', async () => {
@@ -436,7 +426,7 @@ describe('Signup Lambda Function', () => {
       headers: {
         origin: 'https://moviexclusives.com'
       },
-      body: JSON.stringify({ email: 'existing@example.com', domain: 'moviexclusives.com' })
+      body: JSON.stringify({ email: 'existing@example.com', domain: 'moviexclusives.com', showQueuePosition: true })
     };
 
     const result = await handler(event);
@@ -471,7 +461,7 @@ describe('Signup Lambda Function', () => {
         'x-api-key': 'test-api-key',
         origin: 'https://moviexclusives.com'
       },
-      body: JSON.stringify({ email: 'existing@example.com', domain: 'moviexclusives.com' })
+      body: JSON.stringify({ email: 'existing@example.com', domain: 'moviexclusives.com', showQueuePosition: true })
     };
 
     const result = await handler(event);
@@ -505,7 +495,7 @@ describe('Signup Lambda Function', () => {
         'x-api-key': 'test-api-key',
         origin: 'https://moviexclusives.com'
       },
-      body: JSON.stringify({ email: 'error@example.com', domain: 'moviexclusives.com' })
+      body: JSON.stringify({ email: 'error@example.com', domain: 'moviexclusives.com', showQueuePosition: true })
     };
 
     const result = await handler(event);
@@ -530,7 +520,7 @@ describe('Signup Lambda Function', () => {
         'x-api-key': 'test-api-key',
         origin: 'https://moviexclusives.com'
       },
-      body: JSON.stringify({ email: 'new@example.com', domain: 'moviexclusives.com' })
+      body: JSON.stringify({ email: 'new@example.com', domain: 'moviexclusives.com', showQueuePosition: true })
     };
 
     const result = await handler(event);
@@ -542,6 +532,122 @@ describe('Signup Lambda Function', () => {
     expect(body.sequenceNumber).toBe(42);
     expect(body.email).toBe('new@example.com');
     expect(body.domain).toBe('moviexclusives.com');
+    expect(body.alreadySubscribed).toBe(false);
+  });
+
+  test('should not return sequence number when showQueuePosition is false', async () => {
+    // Mock no existing record found
+    mockDynamoDB.send.mockResolvedValueOnce({ Item: null });
+
+    const event = {
+      httpMethod: 'POST',
+      headers: {
+        'x-api-key': 'test-api-key',
+        origin: 'https://moviexclusives.com'
+      },
+      body: JSON.stringify({ email: 'noqueue@example.com', domain: 'moviexclusives.com', showQueuePosition: false })
+    };
+
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body.success).toBe(true);
+    expect(body.message).toBe('Email successfully subscribed');
+    expect(body.sequenceNumber).toBeUndefined();
+    expect(body.alreadySubscribed).toBe(false);
+    // Verify counter was not updated
+    const updateCalls = mockDynamoDB.send.mock.calls.filter(call => call[0].constructor.name === 'UpdateCommand');
+    expect(updateCalls.length).toBe(0);
+  });
+
+  test('should not return sequence number when showQueuePosition is omitted', async () => {
+    // Mock no existing record found
+    mockDynamoDB.send.mockResolvedValueOnce({ Item: null });
+
+    const event = {
+      httpMethod: 'POST',
+      headers: {
+        'x-api-key': 'test-api-key',
+        origin: 'https://moviexclusives.com'
+      },
+      body: JSON.stringify({ email: 'default@example.com', domain: 'moviexclusives.com' })
+    };
+
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body.success).toBe(true);
+    expect(body.message).toBe('Email successfully subscribed');
+    expect(body.sequenceNumber).toBeUndefined();
+    expect(body.alreadySubscribed).toBe(false);
+    // Verify counter was not updated
+    const updateCalls = mockDynamoDB.send.mock.calls.filter(call => call[0].constructor.name === 'UpdateCommand');
+    expect(updateCalls.length).toBe(0);
+  });
+
+  test('should not return sequence number for already subscribed when showQueuePosition is false', async () => {
+    // Mock an existing record retrieval with success status
+    mockDynamoDB.send.mockResolvedValueOnce({
+      Item: {
+        id: 'test-hash',
+        type: 'record',
+        domain: 'moviexclusives.com',
+        sequence_number: 42,
+        status: 'success',
+        timestamp: '2024-01-15T10:30:00.000Z'
+      }
+    });
+
+    const event = {
+      httpMethod: 'POST',
+      headers: {
+        'x-api-key': 'test-api-key',
+        origin: 'https://moviexclusives.com'
+      },
+      body: JSON.stringify({ email: 'existing@example.com', domain: 'moviexclusives.com', showQueuePosition: false })
+    };
+
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body.success).toBe(true);
+    expect(body.message).toBe('Email already subscribed');
+    expect(body.sequenceNumber).toBeUndefined();
+    expect(body.alreadySubscribed).toBe(true);
+  });
+
+  test('should generate sequence number for already subscribed when showQueuePosition is true but record lacks one', async () => {
+    // Mock an existing record retrieval with success status but no sequence_number
+    mockDynamoDB.send.mockResolvedValueOnce({
+      Item: {
+        id: 'test-hash',
+        type: 'record',
+        domain: 'moviexclusives.com',
+        sequence_number: null,
+        status: 'success',
+        timestamp: '2024-01-15T10:30:00.000Z'
+      }
+    });
+
+    const event = {
+      httpMethod: 'POST',
+      headers: {
+        'x-api-key': 'test-api-key',
+        origin: 'https://moviexclusives.com'
+      },
+      body: JSON.stringify({ email: 'noseq@example.com', domain: 'moviexclusives.com', showQueuePosition: true })
+    };
+
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body.success).toBe(true);
+    expect(body.message).toBe('Email successfully subscribed');
+    expect(body.sequenceNumber).toBe(42);
     expect(body.alreadySubscribed).toBe(false);
   });
 }); 

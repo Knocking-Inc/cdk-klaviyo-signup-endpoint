@@ -41,8 +41,12 @@ Key behavioral details:
 
 - **Domain allowlist**: `ALLOWED_DOMAINS` env var is a comma-separated list. Only allowed domains can sign up. The `query` endpoint does not enforce the allowlist but still validates domain format.
 - **Secrets caching**: Secrets are fetched from Secrets Manager and cached in Lambda memory for 5 minutes (`CACHE_DURATION`). Each domain requires three keys in the secret: `KlaviyoPrivateKey_{domain}`, `KlaviyoListId_{domain}`, `KlavioSiteID_{domain}`.
-- **Sequence numbers**: Generated via DynamoDB `UpdateCommand` with `if_not_exists(#count, :start) + :incr`. The starting counter is **23420** (hardcoded in `lambda/index.js`).
-- **Idempotency**: On signup, the Lambda first checks if a `success` record already exists for the email+domain hash. If found, it returns the existing sequence number with `alreadySubscribed: true`. If the prior record has a non-success status, it proceeds with a new signup.
+- **Optional sequence numbers**: By default, no sequence number is generated. When `showQueuePosition: true` is included in the request body, the DynamoDB counter is incremented via `UpdateCommand` with `if_not_exists(#count, :start) + :incr`. The starting counter is **23420** (hardcoded in `lambda/index.js`). When `showQueuePosition` is `false` or omitted, the counter is skipped and `sequenceNumber` is omitted from the response and Klaviyo `custom_source` is `"Website Signup"` without a queue position.
+- **Idempotency**: On signup, the Lambda first checks if a `success` record already exists for the email+domain hash. If found:
+  - If the existing record has a `sequence_number` and `showQueuePosition` is `true`, it returns that number with `alreadySubscribed: true`.
+  - If the existing record has no `sequence_number` but `showQueuePosition` is `true`, it generates a new sequence number and proceeds with a new signup (treating it as a retry with queue position enabled).
+  - If `showQueuePosition` is `false`, it returns `alreadySubscribed: true` without a `sequenceNumber`.
+  - If the prior record has a non-success status, it proceeds with a new signup.
 - **Email hashing**: Stored as `SHA-256(email.toLowerCase() + domain.toLowerCase())`.
 - **Query retry**: The query endpoint accepts `?retry=true` or `?retry=1`. When enabled, it retries every 1 second for up to 4 seconds (5 total attempts) before returning `found: false`. This is to handle DynamoDB eventual consistency after a signup.
 - **CORS**: The Lambda dynamically sets `Access-Control-Allow-Origin` based on the domain. For production domains it returns `https://{domain}`. Localhost/Framer origins get `*`.
